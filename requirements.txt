@@ -1,0 +1,23 @@
+# Core Dependencies
+streamlit
+pandas
+numpy
+
+# Machine Learning
+scikit-learn
+xgboost
+lightgbm
+catboost
+shap
+
+# Visualization
+plotly
+matplotlib
+seaborn
+
+# Data Collection
+yfinance
+
+# Utilities
+pickle-mixin
+python-dateutil
