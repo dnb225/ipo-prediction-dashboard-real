@@ -403,6 +403,152 @@ All predictions are based on information available **before** the IPO's first tr
 # INTRODUCTION PAGE
 # ----------------------------------------------------------------------------
 
+# Helper function for displaying IPO cards
+def display_ipo_card(ipo):
+    """Display a detailed card for a single IPO"""
+
+    # Header
+    col1, col2, col3 = st.columns([2, 1, 1])
+
+    with col1:
+        st.markdown(f"### {ipo['company_name']}")
+        st.markdown(f"**Ticker:** {ipo['ticker']}")
+        if 'ipo_date' in ipo.index:
+            st.markdown(f"**IPO Date:** {pd.to_datetime(ipo['ipo_date']).strftime('%B %d, %Y')}")
+
+    with col2:
+        st.markdown(f"**Industry:** {ipo['industry']}")
+        st.markdown(f"**Firm Age:** {ipo['firm_age']} years")
+
+    with col3:
+        st.markdown(f"**Offer Price:** ${ipo['offer_price']:.2f}")
+        st.markdown(f"**Proceeds:** ${ipo['gross_proceeds'] / 1e6:.1f}M")
+
+    st.markdown("---")
+
+    # Predictions
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        actual_return = ipo['first_day_return'] * 100
+        st.metric(
+            "Actual First-Day Return",
+            f"{actual_return:.2f}%",
+            delta=None
+        )
+
+    with col2:
+        pred_return = ipo['predicted_return'] * 100
+        st.metric(
+            "Predicted Return",
+            f"{pred_return:.2f}%",
+            delta=f"{(pred_return - actual_return):.2f}% error"
+        )
+
+    with col3:
+        risk_prob = ipo['predicted_risk_prob']
+        risk_label, risk_class = get_risk_label(risk_prob)
+        st.metric(
+            "Risk Classification",
+            risk_label,
+            delta=None
+        )
+
+    with col4:
+        actual_risk = "High Risk" if ipo['high_risk_ipo'] == 1 else "Low Risk"
+        pred_risk = "High Risk" if ipo['predicted_high_risk'] == 1 else "Low Risk"
+        correct = " Correct" if ipo['predicted_high_risk'] == ipo['high_risk_ipo'] else " Incorrect"
+        st.metric(
+            "Actual Risk",
+            actual_risk,
+            delta=correct
+        )
+
+    # Model Confidence
+    st.markdown("---")
+    st.markdown("####  Model Confidence")
+
+    confidence = abs(risk_prob - 0.5) * 2  # Scale to 0-1
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=confidence * 100,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Prediction Confidence"},
+            gauge={
+                'axis': {'range': [None, 100]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [0, 33], 'color': "lightgray"},
+                    {'range': [33, 67], 'color': "gray"},
+                    {'range': [67, 100], 'color': "darkgray"}
+                ],
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 80
+                }
+            }
+        ))
+        fig.update_layout(height=250)
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.markdown(f"""
+        **Risk Probability:** {risk_prob * 100:.1f}%
+
+        **Confidence:** {confidence * 100:.1f}%
+
+        {risk_label}
+        """)
+
+    # Key Characteristics
+    st.markdown("---")
+    st.markdown("####  Key Characteristics")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        vc_status = " Yes" if ipo.get('vc_backed', 0) == 1 else " No"
+        prof_status = " Yes" if ipo.get('is_profitable', 0) == 1 else " No"
+
+        st.markdown(f"""
+        **VC-Backed:** {vc_status}
+
+        **Profitable:** {prof_status}
+
+        **Underwriter Rank:** {ipo.get('underwriter_rank', 'N/A')}/10
+        """)
+
+    with col2:
+        st.markdown(f"""
+        **VIX at IPO:** {ipo.get('vix_level', 'N/A'):.1f}
+
+        **S&P 500 1M Return:** {ipo.get('sp500_1m_return', 0) * 100:.2f}%
+
+        **Treasury Yield:** {ipo.get('treasury_10y', 'N/A'):.2f}%
+        """)
+
+    with col3:
+        young_firm = " Yes" if ipo.get('is_young_firm', 0) == 1 else " No"
+        tech_firm = " Yes" if ipo.get('is_tech', 0) == 1 else " No"
+
+        st.markdown(f"""
+        **Young Firm (<5 yrs):** {young_firm}
+
+        **Tech Company:** {tech_firm}
+
+        **Shares Offered:** {ipo.get('shares_offered', 0) / 1e6:.1f}M
+        """)
+
+# ----------------------------------------------------------------------------
+# MODEL PERFORMANCE PAGE
+# ----------------------------------------------------------------------------
+
+
 if page == " Introduction":
     st.title(" Machine Learning for IPO Risk Prediction")
     st.markdown("### Using Real-World IPO Data (2019-2024)")
@@ -772,161 +918,16 @@ elif page == " Home & IPO Search":
                     display_ipo_card(ipo)
 
 
-# Helper function for displaying IPO cards
-def display_ipo_card(ipo):
-    """Display a detailed card for a single IPO"""
-
-    # Header
-    col1, col2, col3 = st.columns([2, 1, 1])
-
-    with col1:
-        st.markdown(f"### {ipo['company_name']}")
-        st.markdown(f"**Ticker:** {ipo['ticker']}")
-        if 'ipo_date' in ipo.index:
-            st.markdown(f"**IPO Date:** {pd.to_datetime(ipo['ipo_date']).strftime('%B %d, %Y')}")
-
-    with col2:
-        st.markdown(f"**Industry:** {ipo['industry']}")
-        st.markdown(f"**Firm Age:** {ipo['firm_age']} years")
-
-    with col3:
-        st.markdown(f"**Offer Price:** ${ipo['offer_price']:.2f}")
-        st.markdown(f"**Proceeds:** ${ipo['gross_proceeds'] / 1e6:.1f}M")
-
-    st.markdown("---")
-
-    # Predictions
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        actual_return = ipo['first_day_return'] * 100
-        st.metric(
-            "Actual First-Day Return",
-            f"{actual_return:.2f}%",
-            delta=None
-        )
-
-    with col2:
-        pred_return = ipo['predicted_return'] * 100
-        st.metric(
-            "Predicted Return",
-            f"{pred_return:.2f}%",
-            delta=f"{(pred_return - actual_return):.2f}% error"
-        )
-
-    with col3:
-        risk_prob = ipo['predicted_risk_prob']
-        risk_label, risk_class = get_risk_label(risk_prob)
-        st.metric(
-            "Risk Classification",
-            risk_label,
-            delta=None
-        )
-
-    with col4:
-        actual_risk = "High Risk" if ipo['high_risk_ipo'] == 1 else "Low Risk"
-        pred_risk = "High Risk" if ipo['predicted_high_risk'] == 1 else "Low Risk"
-        correct = " Correct" if ipo['predicted_high_risk'] == ipo['high_risk_ipo'] else " Incorrect"
-        st.metric(
-            "Actual Risk",
-            actual_risk,
-            delta=correct
-        )
-
-    # Model Confidence
-    st.markdown("---")
-    st.markdown("####  Model Confidence")
-
-    confidence = abs(risk_prob - 0.5) * 2  # Scale to 0-1
-
-    col1, col2 = st.columns([3, 1])
-
-    with col1:
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=confidence * 100,
-            domain={'x': [0, 1], 'y': [0, 1]},
-            title={'text': "Prediction Confidence"},
-            gauge={
-                'axis': {'range': [None, 100]},
-                'bar': {'color': "darkblue"},
-                'steps': [
-                    {'range': [0, 33], 'color': "lightgray"},
-                    {'range': [33, 67], 'color': "gray"},
-                    {'range': [67, 100], 'color': "darkgray"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 80
-                }
-            }
-        ))
-        fig.update_layout(height=250)
-        st.plotly_chart(fig, use_container_width=True)
-
-    with col2:
-        st.markdown(f"""
-        **Risk Probability:** {risk_prob * 100:.1f}%
-
-        **Confidence:** {confidence * 100:.1f}%
-
-        {risk_label}
-        """)
-
-    # Key Characteristics
-    st.markdown("---")
-    st.markdown("####  Key Characteristics")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        vc_status = " Yes" if ipo.get('vc_backed', 0) == 1 else " No"
-        prof_status = " Yes" if ipo.get('is_profitable', 0) == 1 else " No"
-
-        st.markdown(f"""
-        **VC-Backed:** {vc_status}
-
-        **Profitable:** {prof_status}
-
-        **Underwriter Rank:** {ipo.get('underwriter_rank', 'N/A')}/10
-        """)
-
-    with col2:
-        st.markdown(f"""
-        **VIX at IPO:** {ipo.get('vix_level', 'N/A'):.1f}
-
-        **S&P 500 1M Return:** {ipo.get('sp500_1m_return', 0) * 100:.2f}%
-
-        **Treasury Yield:** {ipo.get('treasury_10y', 'N/A'):.2f}%
-        """)
-
-    with col3:
-        young_firm = " Yes" if ipo.get('is_young_firm', 0) == 1 else " No"
-        tech_firm = " Yes" if ipo.get('is_tech', 0) == 1 else " No"
-
-        st.markdown(f"""
-        **Young Firm (<5 yrs):** {young_firm}
-
-        **Tech Company:** {tech_firm}
-
-        **Shares Offered:** {ipo.get('shares_offered', 0) / 1e6:.1f}M
-        """)
-
-# ----------------------------------------------------------------------------
-# MODEL PERFORMANCE PAGE
-# ----------------------------------------------------------------------------
-
 elif page == " Model Performance":
-st.title(" Model Performance Analysis")
-st.markdown("### How well do ML models predict IPO risk?")
+    st.title(" Model Performance Analysis")
+    st.markdown("### How well do ML models predict IPO risk?")
 
-st.markdown("---")
+    st.markdown("---")
 
-# Overview
-st.subheader(" Research Question 2: Can ML outperform baseline heuristics?")
+    # Overview
+    st.subheader(" Research Question 2: Can ML outperform baseline heuristics?")
 
-st.info("""
+    st.info("""
     We compare machine learning models against simple rules that investors might use:
 
     **Baseline Heuristics:**
@@ -938,14 +939,14 @@ st.info("""
     **ML Models:** Logistic Regression, Random Forest, XGBoost
     """)
 
-# Classification Results
-st.markdown("---")
-st.subheader(" Classification Performance (High-Risk Prediction)")
+    # Classification Results
+    st.markdown("---")
+    st.subheader(" Classification Performance (High-Risk Prediction)")
 
-# Show comparison table
-col1, col2 = st.columns([2, 1])
+    # Show comparison table
+    col1, col2 = st.columns([2, 1])
 
-with col1:
+    with col1:
     st.markdown("#### Model Comparison")
 
     # Format the classification results
@@ -957,7 +958,7 @@ with col1:
 
     st.dataframe(clf_display, use_container_width=True, hide_index=True)
 
-with col2:
+    with col2:
     st.markdown("#### Baseline Performance")
 
     if baseline_results is not None:
@@ -972,15 +973,15 @@ with col2:
             **Young + Unprofitable:** 0.600 Accuracy
             """)
 
-# Best model highlight
-best_clf_idx = clf_results['Test_AUC'].idxmax()
-best_clf_name = clf_results.loc[best_clf_idx, 'Model']
-best_clf_auc = clf_results.loc[best_clf_idx, 'Test_AUC']
+    # Best model highlight
+    best_clf_idx = clf_results['Test_AUC'].idxmax()
+    best_clf_name = clf_results.loc[best_clf_idx, 'Model']
+    best_clf_auc = clf_results.loc[best_clf_idx, 'Test_AUC']
 
-baseline_best_auc = 0.550  # VIX rule typical performance
-improvement = best_clf_auc - baseline_best_auc
+    baseline_best_auc = 0.550  # VIX rule typical performance
+    improvement = best_clf_auc - baseline_best_auc
 
-st.success(f"""
+    st.success(f"""
      **Best Model:** {best_clf_name}
 
     - **AUC:** {best_clf_auc:.3f}
@@ -988,25 +989,25 @@ st.success(f"""
     - **Interpretation:** The model correctly ranks high-risk IPOs significantly better than simple rules
     """)
 
-# ROC Curves
-st.markdown("---")
-st.subheader(" ROC Curves - All Models")
+    # ROC Curves
+    st.markdown("---")
+    st.subheader(" ROC Curves - All Models")
 
-# Create ROC curve plot
-fig = go.Figure()
+    # Create ROC curve plot
+    fig = go.Figure()
 
-# Add baseline diagonal
-fig.add_trace(go.Scatter(
+    # Add baseline diagonal
+    fig.add_trace(go.Scatter(
     x=[0, 1],
     y=[0, 1],
     mode='lines',
     name='Random Classifier (AUC=0.50)',
     line=dict(dash='dash', color='gray')
-))
+    ))
 
-# Add each model's ROC curve (would need TPR/FPR data from notebook)
-# For now, show conceptual curves based on AUC
-for idx, row in clf_results.iterrows():
+    # Add each model's ROC curve (would need TPR/FPR data from notebook)
+    # For now, show conceptual curves based on AUC
+    for idx, row in clf_results.iterrows():
     # Approximate ROC curve from AUC
     # This is simplified - in practice, load actual TPR/FPR from notebook
     model_name = row['Model']
@@ -1024,23 +1025,23 @@ for idx, row in clf_results.iterrows():
         name=f'{model_name} (AUC={auc:.3f})'
     ))
 
-fig.update_layout(
+    fig.update_layout(
     title='ROC Curves - Classification Models',
     xaxis_title='False Positive Rate',
     yaxis_title='True Positive Rate',
     height=500,
     hovermode='x unified'
-)
+    )
 
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-# Regression Results
-st.markdown("---")
-st.subheader(" Regression Performance (Return Prediction)")
+    # Regression Results
+    st.markdown("---")
+    st.subheader(" Regression Performance (Return Prediction)")
 
-col1, col2 = st.columns([2, 1])
+    col1, col2 = st.columns([2, 1])
 
-with col1:
+    with col1:
     st.markdown("#### Model Comparison")
 
     # Format regression results
@@ -1051,7 +1052,7 @@ with col1:
 
     st.dataframe(reg_display, use_container_width=True, hide_index=True)
 
-with col2:
+    with col2:
     st.markdown("#### Baseline Performance")
 
     if baseline_results is not None:
@@ -1064,16 +1065,16 @@ with col2:
             - R²: 0.0000
             """)
 
-# Best regressor highlight
-best_reg_idx = reg_results['Test_RMSE'].idxmin()
-best_reg_name = reg_results.loc[best_reg_idx, 'Model']
-best_reg_rmse = reg_results.loc[best_reg_idx, 'Test_RMSE']
-best_reg_r2 = reg_results.loc[best_reg_idx, 'Test_R2']
+    # Best regressor highlight
+    best_reg_idx = reg_results['Test_RMSE'].idxmin()
+    best_reg_name = reg_results.loc[best_reg_idx, 'Model']
+    best_reg_rmse = reg_results.loc[best_reg_idx, 'Test_RMSE']
+    best_reg_r2 = reg_results.loc[best_reg_idx, 'Test_R2']
 
-baseline_rmse = 0.250  # Typical mean baseline
-improvement_pct = (baseline_rmse - best_reg_rmse) / baseline_rmse * 100
+    baseline_rmse = 0.250  # Typical mean baseline
+    improvement_pct = (baseline_rmse - best_reg_rmse) / baseline_rmse * 100
 
-st.success(f"""
+    st.success(f"""
      **Best Model:** {best_reg_name}
 
     - **RMSE:** {best_reg_rmse:.4f}
@@ -1082,11 +1083,11 @@ st.success(f"""
     - **Interpretation:** The model predicts returns more accurately than always guessing the average
     """)
 
-# Actual vs Predicted scatter
-st.markdown("---")
-st.subheader(" Actual vs. Predicted Returns")
+    # Actual vs Predicted scatter
+    st.markdown("---")
+    st.subheader(" Actual vs. Predicted Returns")
 
-fig = px.scatter(
+    fig = px.scatter(
     test_preds,
     x='first_day_return',
     y='predicted_return',
@@ -1100,29 +1101,29 @@ fig = px.scatter(
     },
     title='Actual vs. Predicted First-Day Returns',
     color_discrete_map={0: 'green', 1: 'red'}
-)
+    )
 
-# Add diagonal line (perfect predictions)
-min_val = min(test_preds['first_day_return'].min(), test_preds['predicted_return'].min())
-max_val = max(test_preds['first_day_return'].max(), test_preds['predicted_return'].max())
+    # Add diagonal line (perfect predictions)
+    min_val = min(test_preds['first_day_return'].min(), test_preds['predicted_return'].min())
+    max_val = max(test_preds['first_day_return'].max(), test_preds['predicted_return'].max())
 
-fig.add_trace(go.Scatter(
+    fig.add_trace(go.Scatter(
     x=[min_val, max_val],
     y=[min_val, max_val],
     mode='lines',
     name='Perfect Prediction',
     line=dict(dash='dash', color='gray')
-))
+    ))
 
-st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
 
-# Confusion Matrix
-st.markdown("---")
-st.subheader(" Confusion Matrix - Best Classifier")
+    # Confusion Matrix
+    st.markdown("---")
+    st.subheader(" Confusion Matrix - Best Classifier")
 
-col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns([1, 1])
 
-with col1:
+    with col1:
     # Calculate confusion matrix
     from sklearn.metrics import confusion_matrix
 
@@ -1149,7 +1150,7 @@ with col1:
 
     st.plotly_chart(fig, use_container_width=True)
 
-with col2:
+    with col2:
     # Calculate metrics
     tn, fp, fn, tp = cm.ravel()
 
@@ -1171,20 +1172,20 @@ with col2:
         - **Recall:** Of actual high-risk IPOs, what % did we correctly identify
         """)
 
-# ----------------------------------------------------------------------------
-# INVESTMENT STRATEGIES PAGE
-# ----------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------
+    # INVESTMENT STRATEGIES PAGE
+    # ----------------------------------------------------------------------------
 
 elif page == " Investment Strategies":
-st.title(" Investment Strategy Evaluation")
-st.markdown("### Research Question 3: Can ML predictions construct superior strategies?")
+    st.title(" Investment Strategy Evaluation")
+    st.markdown("### Research Question 3: Can ML predictions construct superior strategies?")
 
-st.markdown("---")
+    st.markdown("---")
 
-# Strategy Overview
-st.subheader(" Strategy Definitions")
+    # Strategy Overview
+    st.subheader(" Strategy Definitions")
 
-st.info("""
+    st.info("""
     We test four investment strategies on a hypothetical $1,000,000 portfolio:
 
     1. **Naive Strategy:** Invest equally in ALL IPOs (baseline)
@@ -1195,11 +1196,11 @@ st.info("""
     All strategies assume equal weighting among selected IPOs.
     """)
 
-# Display strategy results
-st.markdown("---")
-st.subheader(" Strategy Performance Comparison")
+    # Display strategy results
+    st.markdown("---")
+    st.subheader(" Strategy Performance Comparison")
 
-if strategy_results is not None:
+    if strategy_results is not None:
     # Format the dataframe
     display_strategies = strategy_results.copy()
 
@@ -1229,13 +1230,13 @@ if strategy_results is not None:
         - **Dollar Improvement:** ${(improvement / 100) * 1_000_000:,.2f} on $1M investment
         """)
 
-# Visual comparison
-st.markdown("---")
-st.subheader(" Strategy Returns Visualization")
+    # Visual comparison
+    st.markdown("---")
+    st.subheader(" Strategy Returns Visualization")
 
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-with col1:
+    with col1:
     # Bar chart of returns
     fig = px.bar(
         strategy_results,
@@ -1249,7 +1250,7 @@ with col1:
     fig.add_hline(y=0, line_dash="dash", line_color="red", annotation_text="Break-even")
     st.plotly_chart(fig, use_container_width=True)
 
-with col2:
+    with col2:
     # Bar chart of final values
     fig = px.bar(
         strategy_results,
@@ -1263,11 +1264,11 @@ with col2:
     fig.update_layout(yaxis_tickformat='$,.0f')
     st.plotly_chart(fig, use_container_width=True)
 
-# Risk-Return Tradeoff
-st.markdown("---")
-st.subheader(" Risk-Return Tradeoff")
+    # Risk-Return Tradeoff
+    st.markdown("---")
+    st.subheader(" Risk-Return Tradeoff")
 
-fig = px.scatter(
+    fig = px.scatter(
     strategy_results,
     x='Std Dev (%)',
     y='Mean Return (%)',
@@ -1281,44 +1282,44 @@ fig = px.scatter(
         'Sharpe Ratio': 'Sharpe Ratio'
     },
     color_continuous_scale='Viridis'
-)
-fig.update_traces(textposition='top center')
-st.plotly_chart(fig, use_container_width=True)
+    )
+    fig.update_traces(textposition='top center')
+    st.plotly_chart(fig, use_container_width=True)
 
-st.info("""
+    st.info("""
     **Sharpe Ratio:** Measures risk-adjusted returns. Higher is better.
 
     A Sharpe Ratio > 1.0 is considered good, > 2.0 is excellent.
     """)
 
-# Detailed breakdown
-st.markdown("---")
-st.subheader(" Strategy Details")
+    # Detailed breakdown
+    st.markdown("---")
+    st.subheader(" Strategy Details")
 
-selected_strategy = st.selectbox(
+    selected_strategy = st.selectbox(
     "Select a strategy to analyze:",
     strategy_results['Strategy'].tolist()
-)
+    )
 
-strategy_data = strategy_results[strategy_results['Strategy'] == selected_strategy].iloc[0]
+    strategy_data = strategy_results[strategy_results['Strategy'] == selected_strategy].iloc[0]
 
-col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4)
 
-with col1:
+    with col1:
     st.metric(
         "IPOs Invested",
         int(strategy_data['IPOs Invested']),
         delta=f"of {len(test_preds)} total"
     )
 
-with col2:
+    with col2:
     st.metric(
         "Mean Return",
         f"{strategy_data['Mean Return (%)']:.2f}%",
         delta=None
     )
 
-with col3:
+    with col3:
     st.metric(
         "Risk (Std Dev)",
         f"{strategy_data['Std Dev (%)']:.2f}%",
@@ -1326,15 +1327,15 @@ with col3:
         delta_color="inverse"
     )
 
-with col4:
+    with col4:
     st.metric(
         "Sharpe Ratio",
         f"{strategy_data['Sharpe Ratio']:.3f}",
         delta="Higher is better"
     )
 
-# Show which IPOs would be selected
-if selected_strategy != 'Naive':
+    # Show which IPOs would be selected
+    if selected_strategy != 'Naive':
     st.markdown("#### IPOs Selected by This Strategy")
 
     # Reconstruct the selection logic
@@ -1353,11 +1354,11 @@ if selected_strategy != 'Naive':
         hide_index=True
     )
 
-# Key Insights
-st.markdown("---")
-st.subheader(" Key Insights")
+    # Key Insights
+    st.markdown("---")
+    st.subheader(" Key Insights")
 
-st.markdown("""
+    st.markdown("""
     <div class="highlight-box">
     <h4>What We Learned About ML-Guided Investment</h4>
 
@@ -1378,27 +1379,27 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# ----------------------------------------------------------------------------
-# FEATURE ANALYSIS PAGE
-# ----------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------
+    # FEATURE ANALYSIS PAGE
+    # ----------------------------------------------------------------------------
 
 elif page == " Feature Analysis":
-st.title(" Feature Importance Analysis")
-st.markdown("### Research Question 1: Which characteristics most affect first-day returns?")
+    st.title(" Feature Importance Analysis")
+    st.markdown("### Research Question 1: Which characteristics most affect first-day returns?")
 
-st.markdown("---")
+    st.markdown("---")
 
-# Top Features Overview
-st.subheader(" Top 10 Most Predictive Features")
+    # Top Features Overview
+    st.subheader(" Top 10 Most Predictive Features")
 
-st.info("""
+    st.info("""
     Using SHAP (SHapley Additive exPlanations) analysis, we identified the features that 
     most strongly influence IPO first-day returns. SHAP values show how much each feature 
     contributes to pushing predictions higher or lower.
     """)
 
-# Display top features with plain English explanations
-if feature_importance is not None:
+    # Display top features with plain English explanations
+    if feature_importance is not None:
     top_10 = feature_importance.head(10).copy()
 
     # Add plain English explanations
@@ -1443,14 +1444,14 @@ if feature_importance is not None:
                 </div>
                 """, unsafe_allow_html=True)
 
-# Detailed Feature Explanations
-st.markdown("---")
-st.subheader(" Detailed Feature Explanations")
+    # Detailed Feature Explanations
+    st.markdown("---")
+    st.subheader(" Detailed Feature Explanations")
 
-# Organize by category
-tabs = st.tabs(["Deal Structure", "Firm Characteristics", "Market Conditions", "All Features"])
+    # Organize by category
+    tabs = st.tabs(["Deal Structure", "Firm Characteristics", "Market Conditions", "All Features"])
 
-with tabs[0]:  # Deal Structure
+    with tabs[0]:  # Deal Structure
     st.markdown("### Deal Structure Features")
 
     deal_features = ['offer_price', 'shares_offered', 'gross_proceeds', 'log_proceeds',
@@ -1478,7 +1479,7 @@ with tabs[0]:  # Deal Structure
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
-with tabs[1]:  # Firm Characteristics
+    with tabs[1]:  # Firm Characteristics
     st.markdown("### Firm Characteristics")
 
     firm_features = ['firm_age', 'is_young_firm', 'vc_backed', 'is_profitable',
@@ -1515,7 +1516,7 @@ with tabs[1]:  # Firm Characteristics
                         )
                     st.plotly_chart(fig, use_container_width=True)
 
-with tabs[2]:  # Market Conditions
+    with tabs[2]:  # Market Conditions
     st.markdown("### Market Conditions")
 
     market_features = ['vix_level', 'high_vix', 'sp500_1m_return', 'sp500_3m_return',
@@ -1543,7 +1544,7 @@ with tabs[2]:  # Market Conditions
                     )
                     st.plotly_chart(fig, use_container_width=True)
 
-with tabs[3]:  # All Features
+    with tabs[3]:  # All Features
     st.markdown("### All Features Ranked")
 
     # Create a full table with explanations
@@ -1560,27 +1561,27 @@ with tabs[3]:  # All Features
 
     st.dataframe(full_table, use_container_width=True, hide_index=True)
 
-# ----------------------------------------------------------------------------
-# IPO SANDBOX PAGE
-# ----------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------
+    # IPO SANDBOX PAGE
+    # ----------------------------------------------------------------------------
 
 elif page == " IPO Sandbox":
-st.title(" IPO Sandbox - Create Your Own Scenarios")
-st.markdown("### Interactive tool to explore how different factors affect IPO predictions")
+    st.title(" IPO Sandbox - Create Your Own Scenarios")
+    st.markdown("### Interactive tool to explore how different factors affect IPO predictions")
 
-st.markdown("---")
+    st.markdown("---")
 
-st.info("""
+    st.info("""
      **How to use:** Adjust the sliders and inputs below to create a hypothetical IPO scenario. 
     The model will predict the expected first-day return and risk classification in real-time.
     """)
 
-st.markdown("---")
+    st.markdown("---")
 
-# Input sections
-col1, col2 = st.columns(2)
+    # Input sections
+    col1, col2 = st.columns(2)
 
-with col1:
+    with col1:
     st.markdown("###  Deal Structure")
 
     offer_price = st.slider("Offer Price ($)", 10, 200, 50, 5)
@@ -1600,7 +1601,7 @@ with col1:
         ['Technology', 'Healthcare', 'Financial', 'Consumer', 'Industrial', 'Communication']
     )
 
-with col2:
+    with col2:
     st.markdown("###  Market Conditions")
 
     vix_level = st.slider("VIX Level", 10.0, 50.0, 20.0, 1.0)
@@ -1612,30 +1613,30 @@ with col2:
 
     predict_button = st.button(" Generate Prediction", type="primary", use_container_width=True)
 
-# Calculate derived features
-shares_offered = shares_millions * 1_000_000
-gross_proceeds = offer_price * shares_offered
-log_proceeds = np.log(gross_proceeds)
-implied_valuation = gross_proceeds / pct_primary
+    # Calculate derived features
+    shares_offered = shares_millions * 1_000_000
+    gross_proceeds = offer_price * shares_offered
+    log_proceeds = np.log(gross_proceeds)
+    implied_valuation = gross_proceeds / pct_primary
 
-is_young_firm = 1 if firm_age < 5 else 0
-is_tech = 1 if industry == 'Technology' else 0
-high_vix = 1 if vix_level > 20 else 0
-positive_momentum = 1 if sp500_1m > 0 else 0
-market_volatility = vix_level / 100
+    is_young_firm = 1 if firm_age < 5 else 0
+    is_tech = 1 if industry == 'Technology' else 0
+    high_vix = 1 if vix_level > 20 else 0
+    positive_momentum = 1 if sp500_1m > 0 else 0
+    market_volatility = vix_level / 100
 
-# Interactions
-tech_x_vc = is_tech * vc_backed
-young_x_vc = is_young_firm * vc_backed
-vix_x_momentum = vix_level * sp500_1m
+    # Interactions
+    tech_x_vc = is_tech * vc_backed
+    young_x_vc = is_young_firm * vc_backed
+    vix_x_momentum = vix_level * sp500_1m
 
-# Industry dummies
-industry_dummies = {}
-for ind in ['Consumer', 'Financial', 'Healthcare', 'Industrial', 'Technology', 'Communication']:
+    # Industry dummies
+    industry_dummies = {}
+    for ind in ['Consumer', 'Financial', 'Healthcare', 'Industrial', 'Technology', 'Communication']:
     industry_dummies[f'industry_{ind}'] = 1 if industry == ind else 0
 
-# Make prediction
-if predict_button:
+    # Make prediction
+    if predict_button:
     # Construct feature vector
     input_features = {
         'offer_price': offer_price,
@@ -1793,9 +1794,9 @@ if predict_button:
         5. **Market Momentum (S&P 500 {sp500_1m * 100:+.1f}%):** {'Positive momentum helps IPO reception' if sp500_1m > 0 else 'Negative momentum is challenging for IPOs'}
         """)
 
-# ----------------------------------------------------------------------------
-# RESEARCH QUESTIONS PAGE
-# ----------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------
+    # RESEARCH QUESTIONS PAGE
+    # ----------------------------------------------------------------------------
 
 elif page == " Research Questions":
     st.title(" Research Questions & Answers")
